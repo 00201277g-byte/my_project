@@ -1,0 +1,7 @@
+com\example\forecast\config\AppConfig.class
+com\example\forecast\entity\PredictionRecord.class
+com\example\forecast\service\ForecastService.class
+com\example\forecast\common\R.class
+com\example\forecast\controller\ForecastController.class
+com\example\forecast\mapper\PredictionRecordMapper.class
+com\example\forecast\ForecastApplication.class

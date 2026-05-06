@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>电力负荷预测系统</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.6.8/axios.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#333}
+    .header{background:linear-gradient(135deg,#1a3a6e,#2563eb);color:#fff;padding:16px 32px;display:flex;align-items:center;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+    .header h1{font-size:20px;font-weight:600}
+    .header .sub{font-size:13px;opacity:.8;margin-top:2px}
+    .sdot{width:10px;height:10px;border-radius:50%;margin-left:auto}
+    .sdot.ok{background:#4ade80;box-shadow:0 0 6px #4ade80}
+    .sdot.err{background:#f87171}
+    .slabel{font-size:12px;opacity:.8;margin-left:6px}
+    .nav{background:#fff;padding:0 32px;border-bottom:1px solid #e5e7eb;display:flex}
+    .nav-item{padding:14px 20px;cursor:pointer;font-size:14px;border-bottom:3px solid transparent;transition:all .2s}
+    .nav-item:hover{color:#2563eb}
+    .nav-item.active{color:#2563eb;border-bottom-color:#2563eb;font-weight:600}
+    .main{max-width:1200px;margin:24px auto;padding:0 24px}
+    .card{background:#fff;border-radius:12px;padding:24px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:20px}
+    .card-title{font-size:16px;font-weight:600;margin-bottom:16px;color:#1a1a1a}
+    .upload-zone{border:2px dashed #d1d5db;border-radius:10px;padding:40px;text-align:center;cursor:pointer;transition:all .2s;background:#fafafa}
+    .upload-zone:hover,.upload-zone.drag{border-color:#2563eb;background:#eff6ff}
+    .upload-zone .icon{font-size:48px;margin-bottom:12px}
+    .upload-zone p{color:#6b7280;font-size:14px}
+    .upload-zone strong{color:#2563eb}
+    .btn{padding:9px 20px;border-radius:8px;border:none;cursor:pointer;font-size:14px;font-weight:500;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
+    .btn-primary{background:#2563eb;color:#fff}
+    .btn-primary:hover{background:#1d4ed8}
+    .btn-primary:disabled{background:#93c5fd;cursor:not-allowed}
+    .btn-secondary{background:#f3f4f6;color:#374151}
+    .btn-secondary:hover{background:#e5e7eb}
+    .btn-danger{background:#fee2e2;color:#dc2626}
+    .btn-danger:hover{background:#fecaca}
+    .btn-compare{background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0}
+    .btn-compare:hover{background:#dcfce7}
+    .btn-compare:disabled{opacity:.4;cursor:not-allowed}
+    .select{padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;background:#fff;min-width:180px}
+    .ibar{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 16px;font-size:13px;color:#1e40af;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+    .metrics-row{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px}
+    .metric-card{background:linear-gradient(135deg,#eff6ff,#dbeafe);border-radius:10px;padding:16px;text-align:center}
+    .metric-label{font-size:12px;color:#6b7280;margin-bottom:6px}
+    .metric-value{font-size:26px;font-weight:700;color:#1e40af}
+    .metric-unit{font-size:12px;color:#6b7280}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th{background:#f9fafb;padding:10px 12px;text-align:left;font-weight:600;color:#374151;border-bottom:2px solid #e5e7eb}
+    td{padding:10px 12px;border-bottom:1px solid #f3f4f6}
+    tr:hover td{background:#fafafa}
+    .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:500}
+    .badge-success{background:#dcfce7;color:#16a34a}
+    .badge-failed{background:#fee2e2;color:#dc2626}
+    .badge-model{background:#e0e7ff;color:#4338ca}
+    .loading{text-align:center;padding:40px;color:#6b7280}
+    .spinner{display:inline-block;width:24px;height:24px;border:3px solid #e5e7eb;border-top-color:#2563eb;border-radius:50%;animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .ptw{overflow-x:auto;max-height:220px;overflow-y:auto}
+    .pg{display:flex;align-items:center;gap:8px;justify-content:flex-end;margin-top:16px}
+    .pb{padding:6px 12px;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:13px;background:#fff}
+    .pb:hover{background:#eff6ff;border-color:#2563eb}
+    .pb.active{background:#2563eb;color:#fff;border-color:#2563eb}
+    .pb:disabled{opacity:.4;cursor:not-allowed}
+    .cbar{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;font-size:13px;color:#166534}
+    .modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;display:flex;align-items:center;justify-content:center}
+    .modal{background:#fff;border-radius:14px;width:820px;max-width:96vw;max-height:90vh;overflow-y:auto;padding:28px;box-shadow:0 8px 32px rgba(0,0,0,.18)}
+    .modal-lg{width:1020px}
+    .mh{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+    .mt{font-size:17px;font-weight:700;color:#1a1a1a}
+    .mc{width:32px;height:32px;border-radius:50%;border:none;background:#f3f4f6;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center}
+    .mc:hover{background:#e5e7eb}
+    .ldot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:4px}
+    input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:#2563eb}
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="header">
+    <div><h1>⚡ 电力负荷预测系统</h1><div class="sub">基于 CNN+Transformer 深度学习模型 | 哈尔滨理工大学</div></div>
+    <div style="margin-left:auto;display:flex;align-items:center">
+      <div class="sdot" :class="serverOk?'ok':'err'"></div>
+      <span class="slabel">{{ serverOk?'Python服务在线':'Python服务离线' }}</span>
+    </div>
+  </div>
+
+  <div class="nav">
+    <div class="nav-item" :class="{active:tab==='upload'}"  @click="tab='upload'">📤 数据上传</div>
+    <div class="nav-item" :class="{active:tab==='predict'}" @click="tab='predict'">🔮 预测分析</div>
+    <div class="nav-item" :class="{active:tab==='history'}" @click="tab='history';loadHistory()">📋 历史记录</div>
+  </div>
+
+  <div class="main">
+
+    <!-- 上传 -->
+    <div v-if="tab==='upload'">
+      <div class="card">
+        <div class="card-title">上传电力负荷数据</div>
+        <div class="upload-zone" :class="{drag}" @click="$refs.fi.click()" @dragover.prevent="drag=true" @dragleave="drag=false" @drop.prevent="onDrop">
+          <div class="icon">📁</div>
+          <p>点击或拖拽上传 <strong>CSV 文件</strong></p>
+          <p style="margin-top:6px;font-size:12px">需包含：time, load_mw, temperature_c, dewpoint_c, wind_speed_mps, relative_humidity</p>
+        </div>
+        <input ref="fi" type="file" accept=".csv" style="display:none" @change="onFileSelect">
+      </div>
+      <div class="card" v-if="uploadResult">
+        <div class="card-title">✅ 上传成功</div>
+        <div class="ibar">📄 {{ uploadResult.originalName }} | 总行数：{{ uploadResult.totalRows }} | 列数：{{ uploadResult.headers.length }}</div>
+        <div class="ptw">
+          <table>
+            <thead><tr><th v-for="h in uploadResult.headers" :key="h">{{ h }}</th></tr></thead>
+            <tbody><tr v-for="(row,i) in uploadResult.preview" :key="i"><td v-for="h in uploadResult.headers" :key="h">{{ row[h] }}</td></tr></tbody>
+          </table>
+        </div>
+        <div style="margin-top:16px"><button class="btn btn-primary" @click="tab='predict'">前往预测 →</button></div>
+      </div>
+    </div>
+
+    <!-- 预测 -->
+    <div v-if="tab==='predict'">
+      <div class="card">
+        <div class="card-title">预测配置</div>
+        <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap">
+          <div>
+            <div style="font-size:13px;color:#6b7280;margin-bottom:6px">选择数据文件</div>
+            <input class="select" style="min-width:280px" v-model="predictFileName" :placeholder="uploadResult?uploadResult.fileName:'请先上传文件'">
+          </div>
+          <div>
+            <div style="font-size:13px;color:#6b7280;margin-bottom:6px">预测模型</div>
+            <select class="select" v-model="selectedModel">
+              <option value="cnn_transformer">CNN+Transformer（MAPE参考：2.13%）</option>
+              <option value="lgbm">LightGBM（MAPE参考：1.75%）</option>
+              <option value="lstm">LSTM（MAPE参考：2.09%）</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" @click="runPredict" :disabled="predicting||!predictFileName">
+            <span v-if="predicting"><span class="spinner"></span> 预测中...</span>
+            <span v-else>🚀 开始预测</span>
+          </button>
+        </div>
+      </div>
+      <div v-if="predictResult">
+        <div class="metrics-row">
+          <div class="metric-card"><div class="metric-label">使用模型</div><div class="metric-value" style="font-size:18px">{{ predictResult.model }}</div></div>
+          <div class="metric-card"><div class="metric-label">预测步数</div><div class="metric-value">{{ predictResult.forecast_horizon }}</div><div class="metric-unit">小时</div></div>
+          <div class="metric-card"><div class="metric-label">模型MAPE参考</div><div class="metric-value">{{ predictResult.predictions[0]?.mape_ref }}</div><div class="metric-unit">%</div></div>
+        </div>
+        <div class="card"><div class="card-title">预测曲线（未来24小时电力负荷）</div><div ref="chartDom" style="width:100%;height:380px"></div></div>
+        <div class="card">
+          <div class="card-title">逐步预测结果</div>
+          <table>
+            <thead><tr><th>预测步</th><th>预测负荷 (MW)</th><th>约为历史均值的</th></tr></thead>
+            <tbody>
+            <tr v-for="p in predictResult.predictions" :key="p.step">
+              <td>+{{ p.step }}h</td><td><strong>{{ p.load_mw.toLocaleString() }}</strong></td><td>{{ (p.load_mw/73475*100).toFixed(1) }}%</td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div v-if="!predictResult&&!predicting" class="card loading">选择文件和模型后点击"开始预测"</div>
+    </div>
+
+    <!-- 历史记录 -->
+    <div v-if="tab==='history'">
+      <div class="cbar" v-if="compareIds.length>0">
+        <span>✅ 已选 {{ compareIds.length }} 条</span>
+        <button class="btn btn-compare" :disabled="compareIds.length<2" @click="openCompare">📊 对比分析（{{ compareIds.length }}/4）</button>
+        <button class="btn btn-secondary" style="padding:6px 14px;font-size:12px" @click="compareIds=[]">清除选择</button>
+        <span style="color:#6b7280;font-size:12px">最少2条，最多4条</span>
+      </div>
+      <div class="card">
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+          <span>历史预测记录</span>
+          <span style="font-size:13px;color:#6b7280;font-weight:400">勾选记录可进行对比分析</span>
+        </div>
+        <div v-if="historyLoading" class="loading"><div class="spinner"></div></div>
+        <div v-else>
+          <table>
+            <thead>
+            <tr>
+              <th style="width:40px">对比</th><th>ID</th><th>模型</th><th>文件名</th><th>预测时间</th><th>MAPE参考</th><th>状态</th><th>操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr v-for="r in historyData.records" :key="r.id" :style="compareIds.includes(r.id)?'background:#eff6ff':''">
+              <td><input type="checkbox" :checked="compareIds.includes(r.id)" :disabled="!compareIds.includes(r.id)&&compareIds.length>=4" @change="toggleCompare(r.id)"></td>
+              <td>{{ r.id }}</td>
+              <td><span class="badge badge-model">{{ r.modelName }}</span></td>
+              <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="r.fileName">{{ r.fileName }}</td>
+              <td>{{ r.predictTime }}</td>
+              <td>{{ r.mapeRef?r.mapeRef.toFixed(2)+'%':'-' }}</td>
+              <td><span class="badge" :class="r.status==='success'?'badge-success':'badge-failed'">{{ r.status==='success'?'成功':'失败' }}</span></td>
+              <td style="display:flex;gap:6px">
+                <button class="btn btn-secondary" style="padding:4px 12px;font-size:12px" @click="openDetail(r.id)">详情</button>
+                <button class="btn btn-danger" style="padding:4px 12px;font-size:12px" @click="deleteRecord(r.id)">删除</button>
+              </td>
+            </tr>
+            </tbody>
+          </table>
+          <div class="pg" v-if="historyData.total>0">
+            <span style="font-size:13px;color:#6b7280">共 {{ historyData.total }} 条</span>
+            <button class="pb" :disabled="historyPage<=1" @click="historyPage--;loadHistory()">上一页</button>
+            <button class="pb active">{{ historyPage }}</button>
+            <button class="pb" :disabled="historyPage>=historyData.pages" @click="historyPage++;loadHistory()">下一页</button>
+          </div>
+          <div v-if="!historyData.records?.length" class="loading">暂无预测记录</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+
+  <!-- 详情弹窗 -->
+  <div class="modal-mask" v-if="detailVisible" @click.self="detailVisible=false">
+    <div class="modal">
+      <div class="mh">
+        <div class="mt">📊 预测详情 #{{ detailData.id }}</div>
+        <button class="mc" @click="detailVisible=false">×</button>
+      </div>
+      <div class="ibar">
+        <span>模型：<strong>{{ detailData.modelName }}</strong></span>
+        <span>文件：{{ detailData.fileName }}</span>
+        <span>时间：{{ detailData.predictTime }}</span>
+        <span>MAPE参考：{{ detailData.mapeRef?detailData.mapeRef.toFixed(2)+'%':'-' }}</span>
+      </div>
+      <div v-if="detailPredictions.length">
+        <div ref="detailChartDom" style="width:100%;height:300px;margin-bottom:20px"></div>
+        <table>
+          <thead><tr><th>预测步</th><th>预测负荷 (MW)</th><th>约为历史均值的</th></tr></thead>
+          <tbody>
+          <tr v-for="p in detailPredictions" :key="p.step">
+            <td>+{{ p.step }}h</td>
+            <td><strong>{{ Number(p.load_mw).toLocaleString() }}</strong></td>
+            <td>{{ (Number(p.load_mw)/73475*100).toFixed(1) }}%</td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-else class="loading">暂无预测数据（旧记录需重新预测才有图表）</div>
+    </div>
+  </div>
+
+  <!-- 对比弹窗 -->
+  <div class="modal-mask" v-if="compareVisible" @click.self="compareVisible=false">
+    <div class="modal modal-lg">
+      <div class="mh">
+        <div class="mt">📈 多模型预测对比</div>
+        <button class="mc" @click="compareVisible=false">×</button>
+      </div>
+      <div style="display:flex;gap:20px;margin-bottom:16px;flex-wrap:wrap">
+        <div v-for="(item,i) in compareItems" :key="item.id" style="display:flex;align-items:center;gap:6px;font-size:13px">
+          <span class="ldot" :style="{background:colors[i]}"></span>
+          <strong>#{{ item.id }}</strong> {{ item.modelName }}
+          <span style="color:#6b7280">{{ item.predictTime?.slice(0,16) }}</span>
+          <span style="color:#6b7280">MAPE参考：{{ item.mapeRef?item.mapeRef.toFixed(2)+'%':'-' }}</span>
+        </div>
+      </div>
+      <div ref="compareChartDom" style="width:100%;height:360px;margin-bottom:24px"></div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+          <tr>
+            <th>预测步</th>
+            <th v-for="(item,i) in compareItems" :key="item.id">
+              <span class="ldot" :style="{background:colors[i]}"></span>#{{ item.id }} {{ item.modelName }}
+            </th>
+          </tr>
+          </thead>
+          <tbody>
+          <tr v-for="step in 24" :key="step">
+            <td>+{{ step }}h</td>
+            <td v-for="item in compareItems" :key="item.id">
+              {{ item.predictions[step-1]?Number(item.predictions[step-1].load_mw).toLocaleString()+' MW':'-' }}
+            </td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script>
+  const { createApp, ref, reactive, onMounted, nextTick } = Vue;
+  const API = 'http://localhost:8080/api';
+  const COLORS = ['#2563eb','#16a34a','#dc2626','#d97706'];
+
+  createApp({
+    setup() {
+      const tab = ref('upload'), serverOk = ref(false), drag = ref(false);
+      const uploadResult = ref(null), predictFileName = ref(''), selectedModel = ref('cnn_transformer');
+      const predicting = ref(false), predictResult = ref(null);
+      const historyLoading = ref(false), historyPage = ref(1);
+      const historyData = reactive({ records:[], total:0, pages:0 });
+      const chartDom = ref(null); let chart = null;
+      const detailVisible = ref(false), detailData = ref({}), detailPredictions = ref([]);
+      const detailChartDom = ref(null); let detailChart = null;
+      const compareVisible = ref(false), compareIds = ref([]), compareItems = ref([]);
+      const compareChartDom = ref(null); let compareChart = null;
+      const colors = COLORS;
+
+      async function checkServer() {
+        try { const r = await axios.get(`${API}/status`,{timeout:3000}); serverOk.value = r.data?.data?.status==='ok'; }
+        catch { serverOk.value = false; }
+      }
+
+      async function doUpload(file) {
+        if (!file) return;
+        const form = new FormData(); form.append('file', file);
+        try {
+          const r = await axios.post(`${API}/upload`, form);
+          if (r.data.code===200) { uploadResult.value=r.data.data; predictFileName.value=r.data.data.fileName; alert('上传成功！共 '+r.data.data.totalRows+' 条数据'); }
+          else alert('上传失败：'+r.data.message);
+        } catch(e) { alert('上传出错：'+(e.response?.data?.message||e.message)); }
+      }
+
+      function onFileSelect(e) { doUpload(e.target.files[0]); }
+      function onDrop(e) { drag.value=false; doUpload(e.dataTransfer.files[0]); }
+
+      async function runPredict() {
+        if (!predictFileName.value) { alert('请先上传文件'); return; }
+        predicting.value=true; predictResult.value=null;
+        try {
+          const r = await axios.post(`${API}/predict`,null,{params:{fileName:predictFileName.value,model:selectedModel.value},timeout:60000});
+          if (r.data.code===200) { predictResult.value=r.data.data; await nextTick(); renderChart(r.data.data.predictions); }
+          else alert('预测失败：'+r.data.message);
+        } catch(e) { alert('预测出错：'+(e.response?.data?.message||e.message)); }
+        finally { predicting.value=false; }
+      }
+
+      function renderChart(predictions) {
+        if (!chartDom.value) return;
+        if (chart) { chart.dispose(); chart=null; }
+        chart = echarts.init(chartDom.value);
+        const steps = predictions.map(p=>`+${p.step}h`);
+        const values = predictions.map(p=>p.load_mw);
+        chart.setOption({
+          tooltip:{trigger:'axis',formatter:p=>`${p[0].name}<br/>负荷：${p[0].value.toLocaleString()} MW`},
+          grid:{left:60,right:30,top:40,bottom:40},
+          xAxis:{type:'category',data:steps,axisLabel:{fontSize:11}},
+          yAxis:{type:'value',name:'负荷 (MW)',axisLabel:{formatter:v=>(v/1000).toFixed(0)+'K'}},
+          series:[{type:'line',data:values,smooth:true,lineStyle:{color:'#2563eb',width:2.5},
+            areaStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:'rgba(37,99,235,0.3)'},{offset:1,color:'rgba(37,99,235,0.02)'}]}},
+            symbol:'circle',symbolSize:5,itemStyle:{color:'#2563eb'}}]
+        });
+      }
+
+      function parsePredictions(jsonStr) {
+        if (!jsonStr) return [];
+        try { const p=JSON.parse(jsonStr); return Array.isArray(p)?p:[]; } catch { return []; }
+      }
+
+      async function openDetail(id) {
+        try {
+          const r = await axios.get(`${API}/history/${id}`);
+          if (r.data.code===200) {
+            detailData.value=r.data.data;
+            detailPredictions.value=parsePredictions(r.data.data.predictionsJson);
+            detailVisible.value=true;
+            await nextTick();
+            renderDetailChart(detailPredictions.value);
+          }
+        } catch(e) { alert('获取详情失败：'+e.message); }
+      }
+
+      function renderDetailChart(predictions) {
+        if (!detailChartDom.value||!predictions.length) return;
+        if (detailChart) { detailChart.dispose(); detailChart=null; }
+        detailChart=echarts.init(detailChartDom.value);
+        const steps=predictions.map(p=>`+${p.step}h`);
+        const values=predictions.map(p=>Number(p.load_mw));
+        detailChart.setOption({
+          tooltip:{trigger:'axis',formatter:p=>`${p[0].name}<br/>负荷：${p[0].value.toLocaleString()} MW`},
+          grid:{left:55,right:20,top:30,bottom:35},
+          xAxis:{type:'category',data:steps,axisLabel:{fontSize:11}},
+          yAxis:{type:'value',axisLabel:{formatter:v=>(v/1000).toFixed(0)+'K'}},
+          series:[{type:'line',data:values,smooth:true,lineStyle:{color:'#2563eb',width:2},
+            areaStyle:{color:'rgba(37,99,235,0.15)'},symbol:'circle',symbolSize:4,itemStyle:{color:'#2563eb'}}]
+        });
+      }
+
+      function toggleCompare(id) {
+        const idx=compareIds.value.indexOf(id);
+        if (idx>=0) compareIds.value.splice(idx,1);
+        else if (compareIds.value.length<4) compareIds.value.push(id);
+      }
+
+      async function openCompare() {
+        if (compareIds.value.length<2) { alert('请至少选择2条记录'); return; }
+        try {
+          const results=await Promise.all(compareIds.value.map(id=>axios.get(`${API}/history/${id}`)));
+          compareItems.value=results.map(r=>({...r.data.data,predictions:parsePredictions(r.data.data.predictionsJson)}));
+          compareVisible.value=true;
+          await nextTick();
+          renderCompareChart();
+        } catch(e) { alert('获取对比数据失败：'+e.message); }
+      }
+
+      function renderCompareChart() {
+        if (!compareChartDom.value) return;
+        if (compareChart) { compareChart.dispose(); compareChart=null; }
+        compareChart=echarts.init(compareChartDom.value);
+        const steps=Array.from({length:24},(_,i)=>`+${i+1}h`);
+        const series=compareItems.value.map((item,i)=>({
+          name:`#${item.id} ${item.modelName}`,type:'line',
+          data:item.predictions.map(p=>Number(p.load_mw)),smooth:true,
+          lineStyle:{color:COLORS[i],width:2.5},symbol:'circle',symbolSize:5,itemStyle:{color:COLORS[i]},
+        }));
+        compareChart.setOption({
+          tooltip:{trigger:'axis'},
+          legend:{data:series.map(s=>s.name),bottom:0,textStyle:{fontSize:12}},
+          grid:{left:60,right:20,top:40,bottom:60},
+          xAxis:{type:'category',data:steps,axisLabel:{fontSize:11}},
+          yAxis:{type:'value',name:'负荷 (MW)',axisLabel:{formatter:v=>(v/1000).toFixed(0)+'K'}},
+          series,
+        });
+      }
+
+      async function deleteRecord(id) {
+        if (!confirm(`确认删除记录 #${id}？`)) return;
+        try {
+          const r=await axios.delete(`${API}/history/${id}`);
+          if (r.data.code===200) { compareIds.value=compareIds.value.filter(i=>i!==id); await loadHistory(); }
+          else alert('删除失败：'+r.data.message);
+        } catch(e) { alert('删除出错：'+e.message); }
+      }
+
+      async function loadHistory() {
+        historyLoading.value=true;
+        try {
+          const r=await axios.get(`${API}/history`,{params:{page:historyPage.value,size:10}});
+          if (r.data.code===200) Object.assign(historyData,r.data.data);
+        } catch(e) { console.error(e); }
+        finally { historyLoading.value=false; }
+      }
+
+      onMounted(()=>{ checkServer(); setInterval(checkServer,30000); });
+
+      return {
+        tab,serverOk,drag,uploadResult,predictFileName,selectedModel,predicting,predictResult,
+        historyLoading,historyPage,historyData,chartDom,
+        detailVisible,detailData,detailPredictions,detailChartDom,
+        compareVisible,compareIds,compareItems,compareChartDom,colors,
+        onFileSelect,onDrop,runPredict,loadHistory,openDetail,deleteRecord,toggleCompare,openCompare,
+      };
+    }
+  }).mount('#app');
+</script>
+</body>
+</html>
